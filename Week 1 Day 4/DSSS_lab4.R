@@ -12,8 +12,8 @@
 # You know the drill by now!
 library(httr)
 library(XML)
-
-setwd('/path/to/folder') # Change this to wherever you want to work in.
+getwd()
+setwd('C:/Users/paty_/OneDrive/Documentos') # Change this to wherever you want to work in.
 
 # THE SIMPLE RECIPE
 # =================
@@ -33,6 +33,7 @@ dom <- htmlParse(page_content)
 # Step 5: Use XPath to select data you need to collect: for today we need the links
 # of articles
 news_links <- xpathSApply(dom, '//article[contains(@class, "FeedTeaser")]/a/@href')
+print(news_links)
 
 # NEW TODAY:
 # Step 6: automatically scrape
