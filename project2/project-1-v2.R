@@ -16,14 +16,13 @@
 # with encoding (Stockholm has a lot of Swedish characters that can go wrong),
 # jsonlite to work with the API response, and readr to save the final CSV.
 
-#install.packages(c("httr", "XML", "stringi", "jsonlite", "readr"))
+install.packages(c("httr", "XML", "stringi", "jsonlite", "readr", "gt"))
 
 library(httr)
 library(XML)
 library(stringi)
 library(jsonlite)
-library(readr)
-
+library(gt)
 
 
 # 2. WORKING DIRECTORY
@@ -60,7 +59,6 @@ response$status_code
 response$headers
 
 # Checking the content type. This tells me the page is HTML with UTF-8 encoding,
-# which is what I expected.
 
 response[["headers"]][["content-type"]]
 
@@ -80,6 +78,7 @@ response[["headers"]][["content-type"]]
 class(response$content)
 
 # Converting the raw response into a readable HTML string using UTF-8 encoding.
+
 
 html <- content(response, as = "text", encoding = "UTF-8")
 
@@ -116,16 +115,17 @@ html <- paste0(lines, collapse = "\n")
 # 6. PARSE THE HTML AND CHECK IF THE DATA IS THERE
 
 # Parsing the HTML into a DOM tree so I can use XPath to navigate the structure.
-# XPath doesn't work on raw text strings, it needs the parsed tree.
+# because XPath doesn't work on raw text strings, it needs the parsed tree.
 
 dom <- htmlParse(html)
 
 # Before doing anything else, I wanted to check if the event data is actually
-# embedded in the HTML, or if it loads dynamically with JavaScript.
-# If this returns TRUE, I don't need Selenium — the data is already there.
+# embedded in the HTML or if it loads dynamically with JavaScript.
+# If this returns TRUE, I don't need Selenium since the data is already there.
 
 grepl("The Hornstull Market", html)
 
+# Since it returned true I can continue without Selenium
 
 
 # 7. EXPLORE THE PAGE STRUCTURE AND EXTRACT NAMES + LINKS
@@ -142,8 +142,7 @@ xpathSApply(dom, "//h3", xmlValue)
 
 xpathSApply(dom, "//a", xmlValue)
 
-# From testing, h3 tags contain the event names and a tags contain the links.
-
+# From testing I can see that h3 tags contain the event names and a tags contain the links.
 
 
 # Extracting event names from h3 elements.
@@ -182,43 +181,53 @@ events_df <- data.frame(
 events_df
 
 
+# I decided to create a table so I can see the first result of database 
+#  This table was exported as an image and used in the report to show the initial
+# scraped data with event names and links
+
+events_table <- events_df |>
+  gt() |>
+  tab_header(
+    title = "First version of the scraped events dataset"
+  )
+
+gtsave(events_table, "events_table.png")
 
 # 8. FINDING WHERE DATES, CATEGORIES, AND LOCATIONS ARE STORED
 
-# Testing paragraph tags first — empty, so dates and categories are not in <p>.
+# Testing paragraph tags first .
 
 xpathSApply(dom, "//p", xmlValue)
+
+# empty, so dates and categories are not in <p>
 
 # Testing span and div tags.
 
 xpathSApply(dom, "//span", xmlValue)
 
-xpathSApply(dom, "//div", xmlValue)
+#xpathSApply(dom, "//div", xmlValue)
 
 # The div result is very messy because divs wrap everything including menus,
 # filters, and icons. Saving it and looking at just the first few results
 # was more useful.
 
-all_divs <- xpathSApply(dom, "//div", xmlValue)
+# Testing div tags
 
+all_divs <- xpathSApply(dom, "//div", xmlValue)
 head(all_divs, 30)
 
-# Testing time tags — empty, so dates are not stored there either.
+# Still the output was too messy because divs included large sections of the page,
+# such as menus, filters, icons, categories, event names, dates, and locations.
+# This showed that divs were also not useful for direct extraction.
 
-xpathSApply(dom, "//time", xmlValue)
 
-# Collecting ALL text elements from the page to understand the structure.
-# This was the approach that actually worked — by seeing the order of
-# all text elements, I could spot a repeating pattern around the events.
+# Since the div output was too broad, I extracted all text elements separately.
+# Looking at the first 100 text elements made the structure easier to inspect.
+# In this output, I found a repeated pattern after the 84 line:
+# event name, category, event name again, "Calendar icon", date, "Location icon", location.
 
 all_text <- xpathSApply(dom, "//*[text()]", xmlValue)
-
 head(all_text, 100)
-
-# The pattern I found: event name, category, event name again,
-# "Calendar icon", date, "Location icon", location.
-# Once I saw this, I could use "Calendar icon" as an anchor to extract
-# everything around it.
 
 
 
@@ -237,7 +246,7 @@ calendar_positions <- which(all_text == "Calendar icon")
 
 calendar_positions
 
-# The first "Calendar icon" is in the filter section at the top of the page,
+# I see that the first "Calendar icon" is in the filter section at the top of the page,
 # not from an actual event. I filter those out by checking whether the next
 # element is actually a month name. If it's not, it's not a real event date.
 
@@ -543,41 +552,77 @@ duration_df
 
 
 
-# 13. DOWNLOAD ONE EVENT IMAGE (non-text file)
+# 13. DOWNLOAD EVENT IMAGES (non-text files)
 
-# To include an example of downloading a non-text file, I download the main
-# image from the first event page. The image URL is stored in the og:image
-# meta tag, which is a common way websites define their preview image.
+# I download the main image from each event page when an image is available.
+# The image URL is stored in the og:image meta tag, which is commonly used by
+# websites to define the preview image of a page.
+# The images are saved in a local folder, and the dataset stores both the
+# original image URL and the local file path.
 
-test_event_url <- events_df_clean$link[1]
+dir.create("event_images", showWarnings = FALSE)
 
-test_event_response <- GET(test_event_url)
+event_image_urls <- c()
+event_image_files <- c()
 
-test_event_html <- content(test_event_response, as = "text", encoding = "UTF-8")
-
-test_event_dom <- htmlParse(test_event_html)
-
-test_image_url <- xpathSApply(
-  test_event_dom,
-  "//meta[@property='og:image']",
-  xmlGetAttr,
-  "content"
-)
-
-test_image_url
-
-# Downloading and saving it as a JPG file.
-
-if (length(test_image_url) > 0) {
+for (i in seq_len(nrow(events_df_clean))) {
   
-  image_response <- GET(
-    test_image_url[1],
-    write_disk("visitstockholm_event_image.jpg", overwrite = TRUE)
-  )
+  event_url <- events_df_clean$link[i]
   
-  image_response$status_code
+  event_response <- GET(event_url)
+  
+  if (event_response$status_code == 200) {
+    
+    event_html <- content(event_response, as = "text", encoding = "UTF-8")
+    
+    event_dom <- htmlParse(event_html)
+    
+    image_url <- xpathSApply(
+      event_dom,
+      "//meta[@property='og:image']",
+      xmlGetAttr,
+      "content"
+    )
+    
+    if (length(image_url) > 0) {
+      
+      event_image_urls[i] <- image_url[1]
+      
+      image_file <- paste0("event_images/event_", i, ".jpg")
+      event_image_files[i] <- image_file
+      
+      image_response <- GET(
+        image_url[1],
+        write_disk(image_file, overwrite = TRUE)
+      )
+      
+      print(paste("Downloaded image", i, "- status:", image_response$status_code))
+      
+    } else {
+      
+      event_image_urls[i] <- NA
+      event_image_files[i] <- NA
+      
+      print(paste("No image found for event", i))
+    }
+    
+  } else {
+    
+    event_image_urls[i] <- NA
+    event_image_files[i] <- NA
+    
+    print(paste("Could not access event", i, "- status:", event_response$status_code))
+  }
+  
+  Sys.sleep(1)
 }
 
+# Adding image information to the cleaned dataset.
+events_df_clean$image_url <- event_image_urls
+events_df_clean$image_file <- event_image_files
+
+# Checking the dataset with image information.
+events_df_clean
 
 
 # 14. DESCRIPTIVE ANALYSIS BY CATEGORY
