@@ -1,6 +1,8 @@
 ################################## Project 1 ##################################
 # Digital Strategies for the Social Sciences
 # Project 1: Scraping event information from Visit Stockholm
+# Name: Patricia Givort Cruz Cabral
+# LIU-ID: patgi434
 #
 # Website: https://www.visitstockholm.com/events/
 #
@@ -246,9 +248,16 @@ calendar_positions <- which(all_text == "Calendar icon")
 
 calendar_positions
 
-# I see that the first "Calendar icon" is in the filter section at the top of the page,
-# not from an actual event. I filter those out by checking whether the next
-# element is actually a month name. If it's not, it's not a real event date.
+
+
+# The first "Calendar icon" belongs to the filter section at the top of the page,
+# not to an actual event. To remove this, I check whether the next element
+# looks like a real event date.
+#
+# This regular expression is not used to scrape all months from the calendar.
+# It is only used to detect date strings, because event dates usually contain
+# a month abbreviation such as May, Jun, or Sep.
+
 
 month_pattern <- "Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec"
 
@@ -272,7 +281,8 @@ event_dates <- all_text[calendar_positions + 1]
 
 event_locations <- all_text[calendar_positions + 3]
 
-# Checking lengths before creating the dataset.
+# Checking lengths before creating the dataset. 
+# So I can be sure Im scrapping correctly
 
 length(event_names)
 
@@ -297,7 +307,17 @@ events_df <- data.frame(
 
 events_df
 
+# Creating a cleaner sample table for the report without the long link column.
+# This table is used in the report to show the main variables extracted
+# from the Visit Stockholm events page.
 
+events_sample_table <- head(events_df[, c("event_name", "category", "date", "location")], 10) |>
+  gt() |>
+  tab_header(
+    title = "Sample of the scraped events dataset"
+  )
+
+gtsave(events_sample_table, "events_sample_table.png")
 
 # 10. CLEAN THE DATASET
 
@@ -313,7 +333,7 @@ dim(events_df)
 
 colSums(is.na(events_df))
 
-# Checking for duplicate events — the website sometimes shows the same event
+# Checking for duplicate events the website sometimes shows the same event
 # in multiple sections of the page.
 
 duplicated(events_df[, c("event_name", "link")])
@@ -368,12 +388,10 @@ events_df_clean
 
 # 11. VISIT INDIVIDUAL EVENT PAGES
 
-# The project requires the crawler to visit at least two pages automatically.
 # Here I loop through the event links and visit each individual event page
-# to extract more detailed information: description, venue, street address, and city.
+# My ideia is to extract more detailed information: description, venue, street address, and city.
 #
-# This is where the scraper moves beyond just the listing page and actually
-# follows each event to its own subpage.
+# The scraper follows each event to its own subpage.
 
 subpage_title <- c()
 subpage_status <- c()
@@ -382,6 +400,9 @@ subpage_venue <- c()
 subpage_street_address <- c()
 subpage_postal_code <- c()
 subpage_city <- c()
+
+# creating empty vectors for the sections
+
 
 for (i in 1:nrow(events_df_clean)) {
   
@@ -429,7 +450,7 @@ for (i in 1:nrow(events_df_clean)) {
   
   
   # The event description usually appears right before "All dates" in the
-  # text order. I use that as an anchor — same idea as on the main page.
+  # text order. I use that as an anchor all of this is the same idea as on the main page.
   
   all_dates_position <- which(page_text == "All dates")
   
@@ -485,7 +506,8 @@ for (i in 1:nrow(events_df_clean)) {
   }
   
   
-  # Pausing between requests to be polite to the server and avoid getting blocked.
+  # Since is a quite bit of info 
+  # I add a pausing between requests to be polite to the server and avoid getting blocked.
   
   Sys.sleep(1)
 }
@@ -524,9 +546,10 @@ events_df_clean[, c(
 # 12. CREATE A VARIABLE USING REGEX
 
 # Using a regular expression to classify events as single-day or multi-day.
+# I will add this as a column on the dataset sheet.
 # If the date string contains a dash (like "14 May - 16 May"), it spans multiple
-# days. If there is no dash, it is just one day.
-# This is an application of the regex concepts from Lab 5.
+# days. If there is no dash, it is just one day. I try to use what we learn in 
+# class of lab 5 
 
 events_df_clean$event_duration_type <- ifelse(
   grepl("-", events_df_clean$date),
@@ -549,7 +572,15 @@ duration_df <- as.data.frame(duration_count)
 names(duration_df) <- c("event_duration_type", "number_of_events")
 
 duration_df
+# Creating a summary table for the report.
 
+duration_table <- duration_df |>
+  gt() |>
+  tab_header(
+    title = "Number of events by duration type"
+  )
+
+gtsave(duration_table, "duration_type_table.png")
 
 
 # 13. DOWNLOAD EVENT IMAGES (non-text files)
@@ -626,6 +657,8 @@ events_df_clean
 
 
 # 14. DESCRIPTIVE ANALYSIS BY CATEGORY
+# My ideia is to answer this question:
+# Which types of events are most common on the Visit Stockholm events page?
 
 # Counting events per category.
 
@@ -652,7 +685,7 @@ category_df
 
 
 # 15. DESCRIPTIVE ANALYSIS BY LOCATION
-
+# The idea is to answer the question where are these events happening?
 # Counting events per location.
 
 location_count <- table(events_df_clean$location)
@@ -670,7 +703,12 @@ location_df <- location_df[
 ]
 
 location_df
-
+# This is useful as an exploratory summary, but it has a limitation.
+# Since the dataset only includes the events available at the time of scraping,
+# mostly for the current period, it does not represent the full year.
+# A location analysis would be more useful if the scraper collected events
+# month by month until the end of the year, because then I could identify
+# which venues or areas appear more often over time.
 
 
 # 16. VISUALIZATION
@@ -717,8 +755,8 @@ dev.off()
 # from OpenStreetMap. This is free to use but requires a User-Agent header.
 #
 # For each event, I build a geocoding query:
-# - If I have a street address, I use street address + postal code + city + Sweden.
-# - If not, I fall back to using the location name + Stockholm + Sweden.
+# . If I have a street address, I use street address + postal code + city + Sweden.
+# . If not, I fall back to using the location name + Stockholm + Sweden.
 
 events_df_clean$geocode_query <- ifelse(
   is.na(events_df_clean$street_address),
@@ -821,3 +859,4 @@ write_excel_csv(
   events_df_final,
   "visitstockholm_events_final.csv"
 )
+
