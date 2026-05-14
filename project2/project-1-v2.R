@@ -7,9 +7,7 @@
 # Website: https://www.visitstockholm.com/events/
 #
 # The idea here is to build a small dataset about events happening in Stockholm
-# by scraping the Visit Stockholm events page. I download the HTML, figure out
-# where the data actually lives in the page structure, extract it, and then
-# enrich it with geolocation data from an API.
+# by scraping the Visit Stockholm events page. 
 ###############################################################################
 
 
@@ -18,7 +16,9 @@
 # with encoding (Stockholm has a lot of Swedish characters that can go wrong),
 # jsonlite to work with the API response, and readr to save the final CSV.
 
-install.packages(c("httr", "XML", "stringi", "jsonlite", "readr", "gt"))
+# Uncoment the line bellow to install the packages
+
+# install.packages(c("httr", "XML", "stringi", "jsonlite", "readr", "gt"))
 
 library(httr)
 library(XML)
@@ -33,9 +33,9 @@ library(gt)
 getwd()
 
 # Setting the folder to the project folder.
-# If you run this on a different computer, you will need to change this path.
+# Change to the folder I want to work on
 
-setwd("~/GitHub/Digital-Strategies-for-Social-Science-Research/project2")
+#setwd("~/GitHub/Digital-Strategies-for-Social-Science-Research/project2")
 
 # Checking again to confirm.
 
@@ -72,7 +72,7 @@ response[["headers"]][["content-type"]]
 
 #response$content
 
-# I can see that the response is in hexadecimal 
+# The response is in hexadecimal 
 # I comment so it wont be too extensive in the code file
 
 # Confirming the class is  raw.
@@ -98,9 +98,6 @@ stri_enc_detect(response$content)
 # 5. SAVE AND RELOAD THE HTML
 
 # Saving the HTML locally so I don't have to re-request the page every time
-# I run the script while testing. This was very useful during development
-# because I could just reload the saved file instead of hitting the server
-# over and over.
 
 writeLines(html, "visitstockholm.html")
 
@@ -121,7 +118,7 @@ html <- paste0(lines, collapse = "\n")
 
 dom <- htmlParse(html)
 
-# Before doing anything else, I wanted to check if the event data is actually
+# Before doing it, I wanted to check if the event data is actually
 # embedded in the HTML or if it loads dynamically with JavaScript.
 # If this returns TRUE, I don't need Selenium since the data is already there.
 
@@ -172,7 +169,7 @@ event_links <- all_links[
 length(event_names)
 length(event_links)
 
-# First version of the dataset — just names and links for now.
+# First version of the dataset (just names and links for now.)
 
 events_df <- data.frame(
   event_name = event_names,
@@ -183,17 +180,6 @@ events_df <- data.frame(
 events_df
 
 
-# I decided to create a table so I can see the first result of database 
-#  This table was exported as an image and used in the report to show the initial
-# scraped data with event names and links
-
-events_table <- events_df |>
-  gt() |>
-  tab_header(
-    title = "First version of the scraped events dataset"
-  )
-
-gtsave(events_table, "events_table.png")
 
 # 8. FINDING WHERE DATES, CATEGORIES, AND LOCATIONS ARE STORED
 
@@ -211,7 +197,7 @@ xpathSApply(dom, "//span", xmlValue)
 
 # The div result is very messy because divs wrap everything including menus,
 # filters, and icons. Saving it and looking at just the first few results
-# was more useful.
+# could be more useful.
 
 # Testing div tags
 
@@ -219,7 +205,7 @@ all_divs <- xpathSApply(dom, "//div", xmlValue)
 head(all_divs, 30)
 
 # Still the output was too messy because divs included large sections of the page,
-# such as menus, filters, icons, categories, event names, dates, and locations.
+# like as menus, filters, icons, categories, event names, dates, and locations.
 # This showed that divs were also not useful for direct extraction.
 
 
@@ -268,10 +254,10 @@ calendar_positions <- calendar_positions[
 calendar_positions
 
 # Extracting information based on the fixed pattern around "Calendar icon":
-# category  = 2 positions before Calendar icon
-# event name = 1 position before Calendar icon
-# date       = 1 position after Calendar icon
-# location   = 3 positions after Calendar icon
+# category  is 2 positions before Calendar icon
+# event name is 1 position before Calendar icon
+# date      is 1 position after Calendar icon
+# location   is 3 positions after Calendar icon
 
 event_categories <- all_text[calendar_positions - 2]
 
@@ -349,7 +335,6 @@ row.names(events_df_clean) <- NULL
 
 
 # Filtering to keep only rows that have a valid event category.
-# The text extraction sometimes grabs extra text from around the event cards,
 # so this step removes anything that does not belong to a known category.
 
 valid_categories <- c(
@@ -389,7 +374,7 @@ events_df_clean
 # 11. VISIT INDIVIDUAL EVENT PAGES
 
 # Here I loop through the event links and visit each individual event page
-# My ideia is to extract more detailed information: description, venue, street address, and city.
+# My idea is to extract more detailed information: description, venue, street address, and city.
 #
 # The scraper follows each event to its own subpage.
 
@@ -401,7 +386,7 @@ subpage_street_address <- c()
 subpage_postal_code <- c()
 subpage_city <- c()
 
-# creating empty vectors for the sections
+# created empty vectors for the sections
 
 
 for (i in 1:nrow(events_df_clean)) {
@@ -508,6 +493,7 @@ for (i in 1:nrow(events_df_clean)) {
   
   # Since is a quite bit of info 
   # I add a pausing between requests to be polite to the server and avoid getting blocked.
+  # But I can see that the regex worked
   
   Sys.sleep(1)
 }
@@ -548,8 +534,7 @@ events_df_clean[, c(
 # Using a regular expression to classify events as single-day or multi-day.
 # I will add this as a column on the dataset sheet.
 # If the date string contains a dash (like "14 May - 16 May"), it spans multiple
-# days. If there is no dash, it is just one day. I try to use what we learn in 
-# class of lab 5 
+# days. If there is no dash, it is just one day. 
 
 events_df_clean$event_duration_type <- ifelse(
   grepl("-", events_df_clean$date),
