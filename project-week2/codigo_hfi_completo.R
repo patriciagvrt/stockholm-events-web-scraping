@@ -15,8 +15,8 @@
 # ============================================================
 
 
-# install.packages(c("FactoMineR", "factoextra", "tidyverse"))
-install.packages(c("tibble", "gridExtra", "grid", "ggplot2"))
+install.packages(c("FactoMineR", "factoextra", "tidyverse"))
+install.packages(c("tibble", "gridExtra", "grid", "gt"))
 
 library(FactoMineR)   # PCA and HCPC
 library(factoextra)   # PCA and cluster visualisations
@@ -25,6 +25,10 @@ library(tibble)
 library(gridExtra)
 library(grid)
 library(ggplot2)
+library(gt)
+library(webshot2)
+library(tibble)
+library(dplyr)
 
 # ============================================================
 # Load and inspect the dataset
@@ -316,11 +320,12 @@ fviz_cluster(
   ggtitle("Country Clusters — Human Freedom Index")
 
 # ============================================================
-# Summary table for the report
+# Summary table for the report using gt
 #
 # This table summarizes the main interpretation of each cluster.
-# It is easier to read than the full cluster plot with all labels.
-# Wrap long text so the table fits inside the PNG
+# It is saved as a PNG file to include in the report.
+# ============================================================
+
 cluster_summary_table <- tibble(
   Cluster = c(1, 2, 3, 4),
   N = c(25, 32, 60, 44),
@@ -344,51 +349,59 @@ cluster_summary_table <- tibble(
   )
 )
 
-# ============================================================
-# Format table with caption
-# ============================================================
-
-cluster_table_png <- cluster_summary_table %>%
-  gt() %>%
-  tab_header(
-    title = md("**Table 1. Summary of country clusters based on HCPC**")
+cluster_table_gt <- cluster_summary_table %>%
+  gt::gt() %>%
+  gt::tab_header(
+    title = gt::md("**Table 1. Summary of country clusters based on HCPC**")
   ) %>%
-  cols_width(
-    Cluster ~ px(70),
-    N ~ px(60),
-    `Freedom profile` ~ px(320),
-    `Main regional pattern` ~ px(300),
-    `Example countries` ~ px(260)
+  gt::cols_label(
+    Cluster = "Cluster",
+    N = "N",
+    `Freedom profile` = "Freedom profile",
+    `Main regional pattern` = "Main regional pattern",
+    `Example countries` = "Example countries"
   ) %>%
-  tab_options(
-    table.width = px(1050),
-    table.font.size = px(13),
-    data_row.padding = px(10),
+  gt::cols_width(
+    Cluster ~ gt::px(70),
+    N ~ gt::px(60),
+    `Freedom profile` ~ gt::px(340),
+    `Main regional pattern` ~ gt::px(330),
+    `Example countries` ~ gt::px(300)
+  ) %>%
+  gt::tab_options(
+    table.width = gt::px(1150),
+    table.font.size = gt::px(13),
+    data_row.padding = gt::px(12),
     column_labels.font.weight = "bold",
     column_labels.background.color = "grey85",
-    heading.title.font.size = px(18),
-    heading.align = "left",
-    table.border.top.color = "white",
-    table.border.bottom.color = "white"
+    heading.title.font.size = gt::px(18),
+    heading.align = "left"
   )
 
-# Show table in Viewer
-cluster_table_png
+# Show table in RStudio Viewer
+cluster_table_gt
+
 
 # ============================================================
-# Save table as PNG
-# ============================================================
+# Save gt table
 
-gtsave(
-  data = cluster_table_png,
+
+gt::gtsave(
+  data = cluster_table_gt,
   filename = "cluster_summary_table_HCPC.png",
   expand = 10,
-  vwidth = 1200,
-  vheight = 650
+  vwidth = 1300,
+  vheight = 750
 )
 
-# Show where the file was saved
-getwd()
+
+
+
+
+
+
+
+
 # ============================================================
 # Cluster membership
 #
