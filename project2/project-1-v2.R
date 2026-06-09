@@ -1,29 +1,32 @@
 ################################## Project 1 ##################################
 # Digital Strategies for the Social Sciences
 # Project 1: Scraping event information from Visit Stockholm
+# Name: Patricia Givort Cruz Cabral
+# LIU-ID: patgi434
 #
 # Website: https://www.visitstockholm.com/events/
 #
 # The idea here is to build a small dataset about events happening in Stockholm
-# by scraping the Visit Stockholm events page. I download the HTML, figure out
-# where the data actually lives in the page structure, extract it, and then
-# enrich it with geolocation data from an API.
+# by scraping the Visit Stockholm events page. And download images from each event and
+# include their geolocation using a API
 ###############################################################################
 
 
 # 1. PACKAGES
-# I need httr to send HTTP requests, XML to parse the HTML, stringi to deal
+# I need it to use httr to send HTTP requests, XML to parse the HTML, stringi to deal
 # with encoding (Stockholm has a lot of Swedish characters that can go wrong),
 # jsonlite to work with the API response, and readr to save the final CSV.
 
-#install.packages(c("httr", "XML", "stringi", "jsonlite", "readr"))
+# Un-comment the line bellow to install the packages
+
+# install.packages(c("httr", "XML", "stringi", "jsonlite", "readr", "gt"))
 
 library(httr)
 library(XML)
 library(stringi)
 library(jsonlite)
+library(gt)
 library(readr)
-
 
 
 # 2. WORKING DIRECTORY
@@ -32,9 +35,9 @@ library(readr)
 getwd()
 
 # Setting the folder to the project folder.
-# If you run this on a different computer, you will need to change this path.
+# Change to the folder I want to work on
 
-setwd("~/GitHub/Digital-Strategies-for-Social-Science-Research/project2")
+#setwd("~/GitHub/Digital-Strategies-for-Social-Science-Research/project2")
 
 # Checking again to confirm.
 
@@ -60,7 +63,6 @@ response$status_code
 response$headers
 
 # Checking the content type. This tells me the page is HTML with UTF-8 encoding,
-# which is what I expected.
 
 response[["headers"]][["content-type"]]
 
@@ -72,7 +74,7 @@ response[["headers"]][["content-type"]]
 
 #response$content
 
-# I can see that the response is in hexadecimal 
+# The response is in hexadecimal 
 # I comment so it wont be too extensive in the code file
 
 # Confirming the class is  raw.
@@ -80,6 +82,7 @@ response[["headers"]][["content-type"]]
 class(response$content)
 
 # Converting the raw response into a readable HTML string using UTF-8 encoding.
+
 
 html <- content(response, as = "text", encoding = "UTF-8")
 
@@ -97,9 +100,6 @@ stri_enc_detect(response$content)
 # 5. SAVE AND RELOAD THE HTML
 
 # Saving the HTML locally so I don't have to re-request the page every time
-# I run the script while testing. This was very useful during development
-# because I could just reload the saved file instead of hitting the server
-# over and over.
 
 writeLines(html, "visitstockholm.html")
 
@@ -112,20 +112,76 @@ lines <- readLines("visitstockholm.html", encoding = "UTF-8")
 html <- paste0(lines, collapse = "\n")
 
 
+# 6.1 TRYING TO USE THE CALENDAR / PAGINATION
+
+# My original idea was to collect events for a longer period, not only the events
+# visible on the first results page. This would make the dataset more useful for
+# my idea of creating an event list that could later be connected to personal
+# calendars.
+
+# First, I checked whether the events visible on the page were already available
+# in the HTML. I searched for a known event name in the HTML:
+
+# grepl("The Hornstull Market", html) *I left it coment to avoid errors*
+
+# This returned TRUE, so I know that the first results page could be scraped with
+# the regular HTML tools from class, without Selenium.
+# But, the calendar filter and pagination seemed more complicated. On the
+# website, the user changes dates by clicking on a visual calendar interface.
+# I could not find a simple HTML table containing all months or all paginated
+# results at once. Because of this, I considered using Selenium, since Selenium
+# can control a browser and is often used when a website requires interaction
+# with JavaScript elements.
+
+
+
+# install.packages("RSelenium")
+# library(RSelenium)
+
+
+
+# rD <- rsDriver(
+#   browser = "chrome",
+#   chromever = "auto",
+#   verbose = FALSE
+# )
+# I tried to install and load RSelenium but
+# This did not work on my computer. The error said that the requested ChromeDriver
+# version did not match the versions available. In practice, this means that the
+# browser driver needed by Selenium did not match my installed Chrome version.
+
+#  I trying Firefox instead:
+
+# rD <- rsDriver(
+#   browser = "firefox",
+#   verbose = FALSE
+# )
+
+# This also did not work. As I search it RSelenium tried to access an external dependency and returned
+# an HTTP error. Because of these driver and dependency issues, I decided not to
+# rely on Selenium in the final script.
+
+# I decided to do regular HTML scraping but the crawler still
+# visits more than one page: it downloads the main results page and then several
+# individual event subpages.
 
 # 6. PARSE THE HTML AND CHECK IF THE DATA IS THERE
 
+
 # Parsing the HTML into a DOM tree so I can use XPath to navigate the structure.
-# XPath doesn't work on raw text strings, it needs the parsed tree.
+# because XPath doesn't work on raw text strings, it needs the parsed tree.
 
 dom <- htmlParse(html)
 
-# Before doing anything else, I wanted to check if the event data is actually
-# embedded in the HTML, or if it loads dynamically with JavaScript.
-# If this returns TRUE, I don't need Selenium — the data is already there.
+
 
 grepl("The Hornstull Market", html)
 
+# I already check before but just to let it here
+# the grepl shows the event data is actually
+# embedded in the HTML or if it loads dynamically with JavaScript.
+
+# Since it returned true I can continue without Selenium
 
 
 # 7. EXPLORE THE PAGE STRUCTURE AND EXTRACT NAMES + LINKS
@@ -142,8 +198,7 @@ xpathSApply(dom, "//h3", xmlValue)
 
 xpathSApply(dom, "//a", xmlValue)
 
-# From testing, h3 tags contain the event names and a tags contain the links.
-
+# From testing I can see that h3 tags contain the event names and a tags contain the links.
 
 
 # Extracting event names from h3 elements.
@@ -171,7 +226,7 @@ event_links <- all_links[
 length(event_names)
 length(event_links)
 
-# First version of the dataset — just names and links for now.
+# First version of the dataset (just names and links for now.)
 
 events_df <- data.frame(
   event_name = event_names,
@@ -185,42 +240,41 @@ events_df
 
 # 8. FINDING WHERE DATES, CATEGORIES, AND LOCATIONS ARE STORED
 
-# Testing paragraph tags first — empty, so dates and categories are not in <p>.
+
+# Testing paragraph tags first .
 
 xpathSApply(dom, "//p", xmlValue)
+
+# empty, so dates and categories are not in <p>
 
 # Testing span and div tags.
 
 xpathSApply(dom, "//span", xmlValue)
 
-xpathSApply(dom, "//div", xmlValue)
+#xpathSApply(dom, "//div", xmlValue) *coment since is so extense*
 
 # The div result is very messy because divs wrap everything including menus,
 # filters, and icons. Saving it and looking at just the first few results
-# was more useful.
+# could be more useful.
+
+# Testing div tags
 
 all_divs <- xpathSApply(dom, "//div", xmlValue)
-
 head(all_divs, 30)
 
-# Testing time tags — empty, so dates are not stored there either.
+# Still the output was too messy because divs included large sections of the page,
+# like as menus, filters, icons, categories, event names, dates, and locations.
+# This showed that divs were also not useful for direct extraction.
 
-xpathSApply(dom, "//time", xmlValue)
+# Since the div output was too broad, I extracted all text elements separately.
 
-# Collecting ALL text elements from the page to understand the structure.
-# This was the approach that actually worked — by seeing the order of
-# all text elements, I could spot a repeating pattern around the events.
 
 all_text <- xpathSApply(dom, "//*[text()]", xmlValue)
-
 head(all_text, 100)
 
-# The pattern I found: event name, category, event name again,
-# "Calendar icon", date, "Location icon", location.
-# Once I saw this, I could use "Calendar icon" as an anchor to extract
-# everything around it.
-
-
+# Looking at the first 100 text elements made the structure easier to inspect.
+# In this output, I found a repeated pattern after the 84 line:
+# event name, category, event name again, "Calendar icon", date, "Location icon", location.
 
 # 9. EXTRACT CATEGORIES, DATES, AND LOCATIONS
 
@@ -237,9 +291,16 @@ calendar_positions <- which(all_text == "Calendar icon")
 
 calendar_positions
 
-# The first "Calendar icon" is in the filter section at the top of the page,
-# not from an actual event. I filter those out by checking whether the next
-# element is actually a month name. If it's not, it's not a real event date.
+
+
+# The first "Calendar icon" belongs to the filter section at the top of the page,
+# not to an actual event. To remove this, I check whether the next element
+# looks like a real event date.
+#
+# This regular expression is not used to scrape all months from the calendar.
+# It is only used to detect date strings, because event dates usually contain
+# a month abbreviation such as May, Jun, or Sep.
+
 
 month_pattern <- "Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec"
 
@@ -250,10 +311,10 @@ calendar_positions <- calendar_positions[
 calendar_positions
 
 # Extracting information based on the fixed pattern around "Calendar icon":
-# category  = 2 positions before Calendar icon
-# event name = 1 position before Calendar icon
-# date       = 1 position after Calendar icon
-# location   = 3 positions after Calendar icon
+# category  is 2 positions before Calendar icon
+# event name is 1 position before Calendar icon
+# date      is 1 position after Calendar icon
+# location   is 3 positions after Calendar icon
 
 event_categories <- all_text[calendar_positions - 2]
 
@@ -263,7 +324,8 @@ event_dates <- all_text[calendar_positions + 1]
 
 event_locations <- all_text[calendar_positions + 3]
 
-# Checking lengths before creating the dataset.
+# Checking lengths before creating the dataset. 
+# So I can be sure Im scrapping correctly
 
 length(event_names)
 
@@ -288,7 +350,17 @@ events_df <- data.frame(
 
 events_df
 
+# Creating a cleaner sample table for the report without the long link column.
+# This table is used in the report to show the main variables extracted
+# from the Visit Stockholm events page.
 
+events_sample_table <- head(events_df[, c("event_name", "category", "date", "location")], 10) |>
+  gt() |>
+  tab_header(
+    title = "Sample of the scraped events dataset"
+  )
+
+gtsave(events_sample_table, "events_sample_table.png")
 
 # 10. CLEAN THE DATASET
 
@@ -304,7 +376,7 @@ dim(events_df)
 
 colSums(is.na(events_df))
 
-# Checking for duplicate events — the website sometimes shows the same event
+# Checking for duplicate events the website sometimes shows the same event
 # in multiple sections of the page.
 
 duplicated(events_df[, c("event_name", "link")])
@@ -320,7 +392,6 @@ row.names(events_df_clean) <- NULL
 
 
 # Filtering to keep only rows that have a valid event category.
-# The text extraction sometimes grabs extra text from around the event cards,
 # so this step removes anything that does not belong to a known category.
 
 valid_categories <- c(
@@ -359,12 +430,10 @@ events_df_clean
 
 # 11. VISIT INDIVIDUAL EVENT PAGES
 
-# The project requires the crawler to visit at least two pages automatically.
 # Here I loop through the event links and visit each individual event page
-# to extract more detailed information: description, venue, street address, and city.
+# My idea is to extract more detailed information: description, venue, street address, and city.
 #
-# This is where the scraper moves beyond just the listing page and actually
-# follows each event to its own subpage.
+# The scraper follows each event to its own subpage.
 
 subpage_title <- c()
 subpage_status <- c()
@@ -373,6 +442,9 @@ subpage_venue <- c()
 subpage_street_address <- c()
 subpage_postal_code <- c()
 subpage_city <- c()
+
+# created empty vectors for the sections
+
 
 for (i in 1:nrow(events_df_clean)) {
   
@@ -420,7 +492,7 @@ for (i in 1:nrow(events_df_clean)) {
   
   
   # The event description usually appears right before "All dates" in the
-  # text order. I use that as an anchor — same idea as on the main page.
+  # text order. I use that as an anchor all of this is the same idea as on the main page.
   
   all_dates_position <- which(page_text == "All dates")
   
@@ -434,7 +506,7 @@ for (i in 1:nrow(events_df_clean)) {
   # The address section follows a "Getting there" heading on each subpage.
   # After "Getting there" comes: Location icon, venue name, street address, city.
   # But some pages also include a postal code between the street address and city,
-  # so I handle both cases with a regex check.
+  # so I manage both cases with a regex check.
   
   getting_there_position <- which(page_text == "Getting there")
   
@@ -447,7 +519,7 @@ for (i in 1:nrow(events_df_clean)) {
     
     # Swedish postal codes look like "121 77" or "11138".
     # This regex checks if the next value matches that pattern.
-    # If it does, I extract it separately; if not, I skip it and go straight to the city.
+    # If it does, I extract it separately if not, I skip it and go straight to the city.
     
     possible_postal_code <- page_text[pos + 4]
     possible_city <- page_text[pos + 5]
@@ -476,7 +548,9 @@ for (i in 1:nrow(events_df_clean)) {
   }
   
   
-  # Pausing between requests to be polite to the server and avoid getting blocked.
+  # Since is a quite bit of info 
+  # I add a pausing between requests to be polite to the server and avoid getting blocked.
+  # But I can see that the regex worked
   
   Sys.sleep(1)
 }
@@ -515,9 +589,9 @@ events_df_clean[, c(
 # 12. CREATE A VARIABLE USING REGEX
 
 # Using a regular expression to classify events as single-day or multi-day.
+# I will add this as a column on the dataset sheet.
 # If the date string contains a dash (like "14 May - 16 May"), it spans multiple
-# days. If there is no dash, it is just one day.
-# This is an application of the regex concepts from Lab 5.
+# days. If there is no dash, it is just one day. 
 
 events_df_clean$event_duration_type <- ifelse(
   grepl("-", events_df_clean$date),
@@ -540,47 +614,93 @@ duration_df <- as.data.frame(duration_count)
 names(duration_df) <- c("event_duration_type", "number_of_events")
 
 duration_df
+# Creating a summary table for the report.
 
-
-
-# 13. DOWNLOAD ONE EVENT IMAGE (non-text file)
-
-# To include an example of downloading a non-text file, I download the main
-# image from the first event page. The image URL is stored in the og:image
-# meta tag, which is a common way websites define their preview image.
-
-test_event_url <- events_df_clean$link[1]
-
-test_event_response <- GET(test_event_url)
-
-test_event_html <- content(test_event_response, as = "text", encoding = "UTF-8")
-
-test_event_dom <- htmlParse(test_event_html)
-
-test_image_url <- xpathSApply(
-  test_event_dom,
-  "//meta[@property='og:image']",
-  xmlGetAttr,
-  "content"
-)
-
-test_image_url
-
-# Downloading and saving it as a JPG file.
-
-if (length(test_image_url) > 0) {
-  
-  image_response <- GET(
-    test_image_url[1],
-    write_disk("visitstockholm_event_image.jpg", overwrite = TRUE)
+duration_table <- duration_df |>
+  gt() |>
+  tab_header(
+    title = "Number of events by duration type"
   )
+
+gtsave(duration_table, "duration_type_table.png")
+
+
+# 13. DOWNLOAD EVENT IMAGES (non-text files)
+
+# I download the main image from each event page when an image is available.
+# The image URL is stored in the og:image meta tag, which is used by
+# websites to define the preview image of a page.
+# The images are saved in a local folder, and the dataset stores both the
+# original image URL and the local file path 
+
+dir.create("event_images", showWarnings = FALSE)
+
+event_image_urls <- c()
+event_image_files <- c()
+
+for (i in seq_len(nrow(events_df_clean))) {
   
-  image_response$status_code
+  event_url <- events_df_clean$link[i]
+  
+  event_response <- GET(event_url)
+  
+  if (event_response$status_code == 200) {
+    
+    event_html <- content(event_response, as = "text", encoding = "UTF-8")
+    
+    event_dom <- htmlParse(event_html)
+    
+    image_url <- xpathSApply(
+      event_dom,
+      "//meta[@property='og:image']",
+      xmlGetAttr,
+      "content"
+    )
+    
+    if (length(image_url) > 0) {
+      
+      event_image_urls[i] <- image_url[1]
+      
+      image_file <- paste0("event_images/event_", i, ".jpg")
+      event_image_files[i] <- image_file
+      
+      image_response <- GET(
+        image_url[1],
+        write_disk(image_file, overwrite = TRUE)
+      )
+      
+      print(paste("Downloaded image", i, "- status:", image_response$status_code))
+      
+    } else {
+      
+      event_image_urls[i] <- NA
+      event_image_files[i] <- NA
+      
+      print(paste("No image found for event", i))
+    }
+    
+  } else {
+    
+    event_image_urls[i] <- NA
+    event_image_files[i] <- NA
+    
+    print(paste("Could not access event", i, "- status:", event_response$status_code))
+  }
+  
+  Sys.sleep(1)
 }
 
+# Adding image information to the cleaned dataset.
+events_df_clean$image_url <- event_image_urls
+events_df_clean$image_file <- event_image_files
+
+# Checking the dataset with image information.
+events_df_clean
 
 
 # 14. DESCRIPTIVE ANALYSIS BY CATEGORY
+# My ideia is to answer this question:
+# Which types of events are most common on the Visit Stockholm events page?
 
 # Counting events per category.
 
@@ -607,7 +727,7 @@ category_df
 
 
 # 15. DESCRIPTIVE ANALYSIS BY LOCATION
-
+# The idea is to answer the question where are these events happening?
 # Counting events per location.
 
 location_count <- table(events_df_clean$location)
@@ -625,7 +745,13 @@ location_df <- location_df[
 ]
 
 location_df
-
+# This is useful as an exploratory summary, but it has a limitation.
+# Since the dataset only includes the events available at the time of scraping,
+# mostly for the current period, it does not represent the full year
+# A location analysis would be more useful if the scraper collected events
+# month by month until the end of the year, because then I could identify
+# which venues or areas appear more often over time but since my 
+# limitations for my project this is not useful
 
 
 # 16. VISUALIZATION
@@ -651,7 +777,7 @@ barplot(
 
 dev.off()
 
-# Uncomment to view directly in RStudio (without saving to file):
+# Uncomment to view directly in RStudio *without saving to file*:
 
 # par(mar = c(5, 18, 4, 2))
 # barplot(
@@ -671,9 +797,9 @@ dev.off()
 # I enriched the dataset with latitude and longitude using the Nominatim API
 # from OpenStreetMap. This is free to use but requires a User-Agent header.
 #
-# For each event, I build a geocoding query:
-# - If I have a street address, I use street address + postal code + city + Sweden.
-# - If not, I fall back to using the location name + Stockholm + Sweden.
+# For all event, I build a geocoding query:
+# . If I have a street address, I use street address + postal code + city + Sweden.
+# . If not, I goes back to using the location name + Stockholm + Sweden.
 
 events_df_clean$geocode_query <- ifelse(
   is.na(events_df_clean$street_address),
@@ -701,7 +827,7 @@ geo_df <- data.frame(
 
 for (i in 1:nrow(geo_df)) {
   
-  # URLencode makes sure spaces and special characters are safe for a URL.
+  # URLencode makes sure spaces and special characters are safe for a URL
   
   query <- URLencode(geo_df$geocode_query[i])
   
@@ -713,8 +839,8 @@ for (i in 1:nrow(geo_df)) {
   
   print(paste("Geocoding address", i, "of", nrow(geo_df)))
   
-  # Nominatim requires a User-Agent header to identify the application.
-  # Without this, the API will reject the request.
+  # Nominatim requires a User-Agent header to identify the application
+  # Without this, the API will reject the request
   
   api_response <- GET(
     api_url,
@@ -734,7 +860,7 @@ for (i in 1:nrow(geo_df)) {
     geo_df$lon[i] <- api_json$lon[1]
   }
   
-  # Pausing between requests — Nominatim has a usage policy that asks
+  # Pausing between requests because Nominatim has a usage policy that asks
   # for no more than one request per second.
   
   Sys.sleep(1)
@@ -776,3 +902,4 @@ write_excel_csv(
   events_df_final,
   "visitstockholm_events_final.csv"
 )
+
