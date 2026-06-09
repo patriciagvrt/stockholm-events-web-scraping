@@ -14,13 +14,17 @@
 # Packages
 # ============================================================
 
-# Run this only once if the packages are not installed:
+
 # install.packages(c("FactoMineR", "factoextra", "tidyverse"))
+install.packages(c("tibble", "gridExtra", "grid", "ggplot2"))
 
 library(FactoMineR)   # PCA and HCPC
 library(factoextra)   # PCA and cluster visualisations
 library(tidyverse)    # data manipulation and plotting
-
+library(tibble)
+library(gridExtra)
+library(grid)
+library(ggplot2)
 
 # ============================================================
 # Load and inspect the dataset
@@ -304,8 +308,87 @@ fviz_cluster(
   show.clust.cent = TRUE
 ) +
   ggtitle("Country Clusters — Human Freedom Index")
+fviz_cluster(
+  hcpc_res,
+  geom = "point",
+  show.clust.cent = TRUE
+) +
+  ggtitle("Country Clusters — Human Freedom Index")
 
+# ============================================================
+# Summary table for the report
+#
+# This table summarizes the main interpretation of each cluster.
+# It is easier to read than the full cluster plot with all labels.
+# Wrap long text so the table fits inside the PNG
+cluster_summary_table <- tibble(
+  Cluster = c(1, 2, 3, 4),
+  N = c(25, 32, 60, 44),
+  `Freedom profile` = c(
+    "Lowest freedom profile: weak rule of law, movement, identity, legal system, and trade freedom.",
+    "Intermediate profile: stronger economic indicators, but weaker personal and civil freedoms.",
+    "Mixed profile: stronger movement, religion, expression, and identity, but weaker legal institutions.",
+    "Highest freedom profile: strong scores across most personal and economic freedom domains."
+  ),
+  `Main regional pattern` = c(
+    "Sub-Saharan Africa; Middle East & North Africa; South Asia.",
+    "Middle East & North Africa; South Asia; Caucasus & Central Asia.",
+    "Latin America & Caribbean; Sub-Saharan Africa; Eastern Europe.",
+    "Western Europe; Eastern Europe; East Asia; North America; Oceania."
+  ),
+  `Example countries` = c(
+    "Syria, Iran, Iraq, Venezuela, Zimbabwe.",
+    "China, Russia, Qatar, Saudi Arabia, UAE.",
+    "Brazil, Mexico, South Africa, Argentina, Ukraine.",
+    "Sweden, Norway, Canada, Japan, New Zealand."
+  )
+)
 
+# ============================================================
+# Format table with caption
+# ============================================================
+
+cluster_table_png <- cluster_summary_table %>%
+  gt() %>%
+  tab_header(
+    title = md("**Table 1. Summary of country clusters based on HCPC**")
+  ) %>%
+  cols_width(
+    Cluster ~ px(70),
+    N ~ px(60),
+    `Freedom profile` ~ px(320),
+    `Main regional pattern` ~ px(300),
+    `Example countries` ~ px(260)
+  ) %>%
+  tab_options(
+    table.width = px(1050),
+    table.font.size = px(13),
+    data_row.padding = px(10),
+    column_labels.font.weight = "bold",
+    column_labels.background.color = "grey85",
+    heading.title.font.size = px(18),
+    heading.align = "left",
+    table.border.top.color = "white",
+    table.border.bottom.color = "white"
+  )
+
+# Show table in Viewer
+cluster_table_png
+
+# ============================================================
+# Save table as PNG
+# ============================================================
+
+gtsave(
+  data = cluster_table_png,
+  filename = "cluster_summary_table_HCPC.png",
+  expand = 10,
+  vwidth = 1200,
+  vheight = 650
+)
+
+# Show where the file was saved
+getwd()
 # ============================================================
 # Cluster membership
 #
@@ -436,64 +519,4 @@ ggsave(
 
 
 
-# ============================================================
-# temporal comparison: 2008 vs 2016
-#
-# Purpose:
-# The main PCA and clustering analysis focuses on 2016 because it
-# is the most recent year in the dataset and allows each country
-# to appear once in the analysis.
-#
-# However, because the dataset also includes earlier observations,
-# this section includes a brief descriptive comparison with 2008.
-# This comparison is not used to construct the PCA dimensions.
-# It only provides historical context.
-# ============================================================
 
-hfi_change <- hfi %>%
-  filter(year %in% c(2008, 2016)) %>%
-  select(year, countries, region, pf_score, ef_score, hf_score) %>%
-  pivot_wider(
-    names_from = year,
-    values_from = c(pf_score, ef_score, hf_score),
-    names_sep = "_"
-  ) %>%
-  filter(
-    !is.na(pf_score_2008),
-    !is.na(pf_score_2016),
-    !is.na(ef_score_2008),
-    !is.na(ef_score_2016),
-    !is.na(hf_score_2008),
-    !is.na(hf_score_2016)
-  ) %>%
-  mutate(
-    change_pf = pf_score_2016 - pf_score_2008,
-    change_ef = ef_score_2016 - ef_score_2008,
-    change_hf = hf_score_2016 - hf_score_2008
-  )
-
-largest_improvement <- hfi_change %>%
-  arrange(desc(change_hf)) %>%
-  select(countries, region, change_hf, change_pf, change_ef) %>%
-  head(10)
-
-print(largest_improvement)
-
-largest_decline <- hfi_change %>%
-  arrange(change_hf) %>%
-  select(countries, region, change_hf, change_pf, change_ef) %>%
-  head(10)
-
-print(largest_decline)
-
-region_change <- hfi_change %>%
-  group_by(region) %>%
-  summarise(
-    mean_change_hf = round(mean(change_hf, na.rm = TRUE), 2),
-    mean_change_pf = round(mean(change_pf, na.rm = TRUE), 2),
-    mean_change_ef = round(mean(change_ef, na.rm = TRUE), 2),
-    n_countries = n()
-  ) %>%
-  arrange(mean_change_hf)
-
-print(region_change)
