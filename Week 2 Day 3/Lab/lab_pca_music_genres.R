@@ -1,6 +1,6 @@
 # DAY 3 - PCA analysis
 # Code for replicating PCA analyses shown in the lectures
-
+install.packages(c("DBI", "RSQLite", "dplyr", "dbplyr"))
 # First, install the necessary packages for PCA/factor analysis
 # install.packages(c("FactoMineR","factoextra","tidyverse"))
 
