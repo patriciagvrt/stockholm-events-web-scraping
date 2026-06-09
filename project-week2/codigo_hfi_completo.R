@@ -1,287 +1,499 @@
 # ============================================================
 # Assignment 2 — Human Freedom Index
-# Pergunta: Are personal freedom and economic freedom
-# distinct dimensions, or do they move together?
-# EDA: PCA + Clustering (HCPC)
+#
+# Research question:
+# What latent dimensions structure human freedom across countries,
+# and do countries with similar freedom profiles cluster into
+# recognizable geopolitical groupings?
+#
+# EDA methods: PCA + Clustering (HCPC)
 # ============================================================
 
-# PASSO 1: Instalar pacotes (so uma vez na vida)
+
+# ============================================================
+# Packages
+# ============================================================
+
+# Run this only once if the packages are not installed:
 # install.packages(c("FactoMineR", "factoextra", "tidyverse"))
 
-# PASSO 2: Carregar pacotes (toda sessao)
-library(FactoMineR)   # para rodar PCA e HCPC
-library(factoextra)   # para visualizar PCA e clusters
-library(tidyverse)    # para manipulacao de dados
+library(FactoMineR)   # PCA and HCPC
+library(factoextra)   # PCA and cluster visualisations
+library(tidyverse)    # data manipulation and plotting
+
 
 # ============================================================
-# PASSO 3: Carregar o dataset
-# IMPORTANTE: coloque o arquivo hfi2008_2016.csv na mesma
-# pasta do seu script R, ou ajuste o caminho abaixo
+# Load and inspect the dataset
 # ============================================================
+
 hfi <- read.csv("hfi2008_2016.csv", stringsAsFactors = FALSE)
 
-# Explorar o dataset
-dim(hfi)       # deve mostrar 1458 linhas x 123 colunas
-names(hfi)     # lista todas as colunas
-head(hfi, 3)   # primeiras 3 linhas
+dim(hfi)        # 1458 rows and 123 columns
+names(hfi)      # variable names
+head(hfi, 3)    # first three rows
+
 
 # ============================================================
-# PASSO 4: Filtrar apenas 2016
-# Assim cada linha = um pais (sem repeticao)
+# Filter the dataset to 2016
+#
+# The analysis focuses on 2016 because it is the most recent
+# year in the dataset. This creates a cross-sectional dataset,
+# where each row represents one country.
 # ============================================================
+
 hfi_2016 <- hfi %>%
   filter(year == 2016)
 
-# Verificar: deve ter 162 paises
-nrow(hfi_2016)
+nrow(hfi_2016)  # 162 countries
+
 
 # ============================================================
-# PASSO 5: Selecionar as variaveis para o PCA
+# Select variables for PCA
 #
-# Estrategia: usamos as 10 variaveis-resumo principais
-# (scores agregados por dominio) em vez das 100+ variaveis
-# detalhadas. Isso e mais interpretavel e tem menos NAs.
+# I use domain-level summary variables instead of the full set
+# of detailed indicators. This keeps the analysis easier to
+# interpret and reduces problems with missing values.
 #
-# pf_ = personal freedom (liberdade pessoal)
-# ef_ = economic freedom (liberdade economica)
+# pf_ = personal freedom
+# ef_ = economic freedom
 # ============================================================
+
 hfi_pca_data <- hfi_2016 %>%
   select(
-    countries, region,
-    # Liberdade pessoal — 5 dominios
-    pf_rol,          # rule of law (estado de direito)
-    pf_ss,           # security & safety (seguranca)
-    pf_movement,     # freedom of movement (liberdade de movimento)
-    pf_religion,     # freedom of religion (liberdade de religiao)
-    pf_expression,   # freedom of expression (liberdade de expressao)
-    pf_identity,     # identity & relationships (identidade)
-    # Liberdade economica — 5 dominios
-    ef_government,   # government size (tamanho do governo)
-    ef_legal,        # legal system & property rights (sistema legal)
-    ef_money,        # sound money (moeda estavel)
-    ef_trade,        # freedom to trade (liberdade de comercio)
-    ef_regulation    # regulation (regulacao)
+    countries,
+    region,
+    
+    # Personal freedom domains
+    pf_rol,          # rule of law
+    pf_ss,           # security and safety
+    pf_movement,     # freedom of movement
+    pf_religion,     # freedom of religion
+    pf_expression,   # freedom of expression
+    pf_identity,     # identity and relationships
+    
+    # Economic freedom domains
+    ef_government,   # size of government
+    ef_legal,        # legal system and property rights
+    ef_money,        # sound money
+    ef_trade,        # freedom to trade internationally
+    ef_regulation    # regulation
   )
 
-# Remover linhas com NAs (PCA nao aceita valores ausentes)
+
+# ============================================================
+# Clean the selected data
+# ============================================================
+
 hfi_clean <- hfi_pca_data %>%
   filter(complete.cases(.))
 
-# Verificar quantos paises sobraram
-nrow(hfi_clean)  # deve ser ~159-162 paises
+nrow(hfi_clean)  # 161 countries after removing missing values
 
-# Salvar nomes e regioes para usar nos graficos
 country_names <- hfi_clean$countries
 country_regions <- hfi_clean$region
 
-# Manter so as colunas numericas para o PCA
 hfi_num <- hfi_clean %>%
   select(-countries, -region)
 
-# Definir nomes dos paises como rownames
 rownames(hfi_num) <- country_names
 
-# Confirmar estrutura final
-dim(hfi_num)      # deve ser ~159 x 10
+dim(hfi_num)     # 161 countries and 11 variables
 head(hfi_num)
 
+
 # ============================================================
-# PASSO 6: Rodar o PCA
+# Run PCA
 #
-# scale.unit = TRUE: padroniza todas as variaveis
-# Isso e OBRIGATORIO quando as variaveis tem escalas diferentes
-# graph = FALSE: nao gera graficos automaticos
+# scale.unit = TRUE standardizes the variables.
+# This is important because PCA is sensitive to variable scales.
+#
+# graph = FALSE prevents automatic graphs from being generated.
 # ============================================================
+
 pca_res <- PCA(
   hfi_num,
   scale.unit = TRUE,
   graph = FALSE
 )
 
-# Ver eigenvalues e variancia explicada
-# Coluna 1: eigenvalue | Coluna 2: % variancia | Coluna 3: % acumulada
-pca_res$eig
+pca_res$eig       # eigenvalues and explained variance
+summary(pca_res)  # PCA summary
 
-# Resumo completo
-summary(pca_res)
 
 # ============================================================
-# PASSO 7: Scree plot
-# Pergunta: quantos componentes reter?
+# Scree plot
+#
+# This plot shows how much variance is explained by each
+# principal component.
 # ============================================================
+
 fviz_eig(
   pca_res,
-  addlabels = TRUE,    # mostra % em cada barra
-  ncp = 10,            # mostra todos os 10 componentes
-  main = "Scree Plot — Human Freedom Index (2016)"
-)
-# INTERPRETE: onde esta o "cotovelo"?
-# Se PC1 + PC2 explicam >60%, reter 2 componentes e razoavel.
+  addlabels = TRUE,
+  ncp = 10
+) +
+  ggtitle("Scree Plot — Human Freedom Index (2016)")
+
+# PC1 and PC2 together explain around 64% of the total variance.
+
 
 # ============================================================
-# PASSO 8: Mapa das variaveis — Correlation Circle
-# Esta e a figura mais importante para a sua pergunta!
+# Variable factor map / Correlation circle
+#
+# This plot shows how the selected freedom variables relate to
+# the first two PCA dimensions.
 # ============================================================
+
 fviz_pca_var(
   pca_res,
-  col.var = "contrib",     # colorir por contribuicao ao PCA
+  col.var = "contrib",
   gradient.cols = c("grey70", "steelblue", "red"),
-  repel = TRUE,            # evita sobreposicao de labels
-  main = "Variable Factor Map — Personal vs Economic Freedom"
-)
-# INTERPRETE:
-# Se pf_ e ef_ apontam em direcoes diferentes = dimensoes distintas
-# Se pf_ e ef_ apontam juntas = andam correlacionadas
+  repel = TRUE
+) +
+  ggtitle("Variable Factor Map — Personal vs Economic Freedom")
+
+# Variables pointing in a similar direction tend to vary together
+# across countries.
+
 
 # ============================================================
-# PASSO 9: Graficos de contribuicao
-# Quais variaveis definem PC1 e PC2?
+# Contribution plots
+#
+# These plots show which variables contribute the most to PC1
+# and PC2.
 # ============================================================
 
-# Contribuicoes para PC1
 fviz_contrib(
   pca_res,
   choice = "var",
   axes = 1,
-  main = "Contributions to PC1"
-)
-# Variaveis acima da linha tracejada sao as que definem PC1
+  top = 11
+) +
+  ggtitle("Contributions to PC1")
 
-# Contribuicoes para PC2
+# PC1 shows the variables that explain the main difference
+# between countries.
+
+
 fviz_contrib(
   pca_res,
   choice = "var",
   axes = 2,
-  main = "Contributions to PC2"
-)
+  top = 11
+) +
+  ggtitle("Contributions to PC2")
+
+# PC2 shows the variables that explain the second main difference
+# between countries.
+
 
 # ============================================================
-# PASSO 10: Mapa dos paises
-# Onde cada pais fica no espaco PCA
+# Country map / Individuals factor map
+#
+# This plot shows where each country is located in the PCA space.
+# Countries close to each other have similar freedom profiles.
 # ============================================================
+
 fviz_pca_ind(
   pca_res,
   label = "all",
   repel = TRUE,
-  col.ind = "cos2",        # colorir por qualidade de representacao
-  gradient.cols = c("grey70", "steelblue", "red"),
-  main = "Countries in PCA Space (2016)"
-)
-# INTERPRETE:
-# Paises proximos = perfis similares de liberdade
-# Paises nos cantos = casos extremos
+  col.ind = "cos2",
+  gradient.cols = c("grey70", "steelblue", "red")
+) +
+  ggtitle("Countries in PCA Space (2016)")
+
+# This map helps identify countries with similar or distinct
+# freedom profiles.
+
 
 # ============================================================
-# PASSO 11: Mapa colorido por REGIAO (variavel suplementar)
-# Mostra se regioes geograficas se agrupam no espaco PCA
+# PCA map colored by region
+#
+# This plot shows whether countries from the same geographical
+# region appear close to each other in the PCA space.
+#
+# Region is used only for interpretation. It was not used as an
+# active variable in the PCA.
 # ============================================================
 
-# Converter regiao em fator
 region_factor <- as.factor(country_regions)
 
 fviz_pca_ind(
   pca_res,
-  label = "none",          # sem labels individuais (muitos paises)
-  habillage = region_factor, # colorir por regiao
-  addEllipses = TRUE,      # elipses ao redor de cada regiao
-  ellipse.level = 0.68,
-  main = "Countries by Region in PCA Space"
-)
-# INTERPRETE: regioes distintas ficam em areas distintas do mapa?
+  label = "none",
+  habillage = region_factor
+) +
+  ggtitle("Countries by Region in PCA Space")
+
+# This plot helps identify possible geographical or geopolitical
+# patterns in countries' freedom profiles.
+
 
 # ============================================================
-# PASSO 12: Biplot — paises e variaveis juntos
+# PCA biplot
+#
+# This plot shows countries and variables in the same PCA space.
+# Countries located in the direction of a variable tend to have
+# higher values for that variable.
 # ============================================================
+
 fviz_pca_biplot(
   pca_res,
   label = "var",
   col.ind = "steelblue",
   col.var = "red",
-  repel = TRUE,
-  main = "PCA Biplot — Human Freedom Index"
-)
+  repel = TRUE
+) +
+  ggtitle("PCA Biplot — Human Freedom Index")
+
 
 # ============================================================
-# PASSO 13: Extrair loadings para interpretar os eixos
+# Loadings
+#
+# Loadings show how strongly each variable is associated with
+# each PCA dimension.
 # ============================================================
 
-# Coordenadas das variaveis nos componentes (= loadings)
 loadings <- as.data.frame(pca_res$var$coord)
+
 print(round(loadings, 3))
 
-# Identificar quais variaveis sao pf_ e quais sao ef_
-loadings$tipo <- ifelse(grepl("^pf_", rownames(loadings)), "Personal Freedom", "Economic Freedom")
-print(loadings[, c("Dim.1", "Dim.2", "tipo")])
+loadings$freedom_type <- ifelse(
+  grepl("^pf_", rownames(loadings)),
+  "Personal Freedom",
+  "Economic Freedom"
+)
+
+print(loadings[, c("Dim.1", "Dim.2", "freedom_type")])
+
+# Variables with higher loadings are more useful for interpreting
+# what each PCA dimension represents.
+
+
+
+
+
+
 
 # ============================================================
-# PASSO 14: Clustering com HCPC
-# (Hierarchical Clustering on Principal Components)
+# Clustering with HCPC
+#
+# HCPC groups countries based on their position in the PCA space.
+# Countries in the same cluster have similar freedom profiles.
 # ============================================================
 
-# HCPC roda clustering diretamente no espaco PCA
-# nb.clust = -1: numero de clusters escolhido automaticamente
+set.seed(123)
+
 hcpc_res <- HCPC(
   pca_res,
   nb.clust = -1,
   graph = FALSE
 )
 
+
 # ============================================================
-# PASSO 15: Visualizar clusters
+# Cluster plot
+#
+# This plot shows the country clusters in the PCA space.
 # ============================================================
 
-# Paises coloridos por cluster no espaco PCA
 fviz_cluster(
   hcpc_res,
   repel = TRUE,
-  show.clust.cent = TRUE,
-  main = "Country Clusters — Human Freedom Index"
-)
+  show.clust.cent = TRUE
+) +
+  ggtitle("Country Clusters — Human Freedom Index")
+
 
 # ============================================================
-# PASSO 16: Explorar os clusters
+# Cluster membership
+#
+# This table shows which countries belong to each cluster.
+# Region is added only to help interpret possible geopolitical
+# patterns.
 # ============================================================
 
-# Ver quais paises estao em cada cluster
 cluster_data <- hcpc_res$data.clust %>%
   rownames_to_column("country") %>%
-  mutate(region = country_regions[match(country, country_names)]) %>%
+  left_join(
+    hfi_clean %>% select(countries, region),
+    by = c("country" = "countries")
+  ) %>%
   select(country, region, clust) %>%
   arrange(clust)
 
 print(cluster_data)
 
-# Contar paises por cluster
-table(hcpc_res$data.clust$clust)
 
-# Medias de cada variavel por cluster
-# USE ISSO para caracterizar os clusters no paper
-cluster_means <- hcpc_res$data.clust %>%
+# ============================================================
+# Number of countries per cluster
+# ============================================================
+
+cluster_count <- cluster_data %>%
+  count(clust)
+
+print(cluster_count)
+
+
+# ============================================================
+# Cluster profiles
+#
+# This table shows the average score of each selected freedom
+# variable by cluster. It helps describe what each cluster means.
+# ============================================================
+
+cluster_means <- hfi_clean %>%
+  mutate(clust = hcpc_res$data.clust$clust) %>%
   group_by(clust) %>%
-  summarise(across(where(is.numeric), ~round(mean(.x, na.rm=TRUE), 2)))
+  summarise(
+    across(
+      where(is.numeric),
+      ~ round(mean(.x, na.rm = TRUE), 2)
+    )
+  )
 
 print(cluster_means)
 
-# Distribuicao de regioes por cluster
-cluster_data %>%
+
+# ============================================================
+# Regional distribution by cluster
+#
+# This table shows whether clusters are related to geographical
+# or geopolitical regions.
+# ============================================================
+
+cluster_region_distribution <- cluster_data %>%
   count(clust, region) %>%
-  arrange(clust, desc(n)) %>%
-  print(n = 50)
+  group_by(clust) %>%
+  mutate(percent = round(100 * n / sum(n), 1)) %>%
+  arrange(clust, desc(n))
+
+print(cluster_region_distribution, n = 50)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 # ============================================================
-# PASSO 17: Salvar graficos (opcional)
-# Para incluir no paper em alta qualidade
+# Save selected graphs
+#
+# Purpose:
+# Saving figures makes it easier to include them in the final paper.
 # ============================================================
 
-# Exemplo de como salvar um grafico:
-# png("correlation_circle.png", width=800, height=700, res=120)
-# fviz_pca_var(pca_res, col.var="contrib",
-#              gradient.cols=c("grey70","steelblue","red"),
-#              repel=TRUE, main="Variable Factor Map")
-# dev.off()
+p_var <- fviz_pca_var(
+  pca_res,
+  col.var = "contrib",
+  gradient.cols = c("grey70", "steelblue", "red"),
+  repel = TRUE
+) +
+  ggtitle("Variable Factor Map — Personal vs Economic Freedom")
 
-# Faca isso para cada grafico que quiser incluir no paper.
+ggsave(
+  filename = "variable_factor_map.png",
+  plot = p_var,
+  width = 8,
+  height = 6,
+  dpi = 300
+)
+
+p_cluster <- fviz_cluster(
+  hcpc_res,
+  repel = TRUE,
+  show.clust.cent = TRUE
+) +
+  ggtitle("Country Clusters — Human Freedom Index")
+
+ggsave(
+  filename = "country_clusters.png",
+  plot = p_cluster,
+  width = 8,
+  height = 6,
+  dpi = 300
+)
+
+
+
+
+
+
+
 
 # ============================================================
-# FIM DO CODIGO
+# temporal comparison: 2008 vs 2016
+#
+# Purpose:
+# The main PCA and clustering analysis focuses on 2016 because it
+# is the most recent year in the dataset and allows each country
+# to appear once in the analysis.
+#
+# However, because the dataset also includes earlier observations,
+# this section includes a brief descriptive comparison with 2008.
+# This comparison is not used to construct the PCA dimensions.
+# It only provides historical context.
 # ============================================================
+
+hfi_change <- hfi %>%
+  filter(year %in% c(2008, 2016)) %>%
+  select(year, countries, region, pf_score, ef_score, hf_score) %>%
+  pivot_wider(
+    names_from = year,
+    values_from = c(pf_score, ef_score, hf_score),
+    names_sep = "_"
+  ) %>%
+  filter(
+    !is.na(pf_score_2008),
+    !is.na(pf_score_2016),
+    !is.na(ef_score_2008),
+    !is.na(ef_score_2016),
+    !is.na(hf_score_2008),
+    !is.na(hf_score_2016)
+  ) %>%
+  mutate(
+    change_pf = pf_score_2016 - pf_score_2008,
+    change_ef = ef_score_2016 - ef_score_2008,
+    change_hf = hf_score_2016 - hf_score_2008
+  )
+
+largest_improvement <- hfi_change %>%
+  arrange(desc(change_hf)) %>%
+  select(countries, region, change_hf, change_pf, change_ef) %>%
+  head(10)
+
+print(largest_improvement)
+
+largest_decline <- hfi_change %>%
+  arrange(change_hf) %>%
+  select(countries, region, change_hf, change_pf, change_ef) %>%
+  head(10)
+
+print(largest_decline)
+
+region_change <- hfi_change %>%
+  group_by(region) %>%
+  summarise(
+    mean_change_hf = round(mean(change_hf, na.rm = TRUE), 2),
+    mean_change_pf = round(mean(change_pf, na.rm = TRUE), 2),
+    mean_change_ef = round(mean(change_ef, na.rm = TRUE), 2),
+    n_countries = n()
+  ) %>%
+  arrange(mean_change_hf)
+
+print(region_change)
