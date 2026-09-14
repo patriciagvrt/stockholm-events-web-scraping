@@ -3,6 +3,8 @@
 # 9 political parties resopnded to 28 statements, from agree to disagree
 # on a 0-4 likert scale (rescaled to 0-1)
 
+
+
 # Init libraries that we will be using
 library(DBI)
 library(RSQLite)
@@ -11,7 +13,8 @@ library(FactoMineR)
 library(factoextra)
 library(tidyverse)
 
-
+getwd()
+setwd("C:/Users/paty_/Documents/GitHub/Digital Strategies for Social Science Research/Week 2 Day 3/Lab")
 # Query the valkalkylator database
 con <- dbConnect(SQLite(),"data/valkalkylator.sqlite")
 
@@ -74,5 +77,10 @@ pca_parties <- PCA(party_responses_labelled,
 # Before doing PCA, all variables should be normalized, i.e. that the mean is zero and
 # standard deviation is 1 (which is what we did for the music property variables)
 # Why did I set it at FALSE here? Could I set it at TRUE as well?
+question_cols <- grep("^q", colnames(wide))
+answers_matrix <- as.matrix(wide[, question_cols])
+
+dist_matrix <- dist(answers_matrix, method = "euclidean")
+print(as.matrix(dist_matrix))  # view it as a full table
 
 # Continue exploring these results in a similar manner as you did with the music genre data!
