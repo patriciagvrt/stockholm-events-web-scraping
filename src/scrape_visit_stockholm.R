@@ -1,8 +1,8 @@
 ################################## Project 1 ##################################
 # Digital Strategies for the Social Sciences
 # Project 1: Scraping event information from Visit Stockholm
-# Name: Patricia Givort Cruz Cabral
-# LIU-ID: patgi434
+# Name: Patricia Cruz
+# 
 #
 # Website: https://www.visitstockholm.com/events/
 #
